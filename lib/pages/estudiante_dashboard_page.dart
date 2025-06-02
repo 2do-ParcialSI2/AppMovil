@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../models/seguimiento_models.dart';
 import '../services/seguimiento_service.dart';
 import '../services/api_service.dart';
-import 'materia_detalle_page.dart';
+import '../pages/materia_detalle_page.dart';
+import '../routes/app_routes.dart';
 
 class EstudianteDashboardPage extends StatefulWidget {
   const EstudianteDashboardPage({Key? key}) : super(key: key);
@@ -154,7 +156,7 @@ class _EstudianteDashboardPageState extends State<EstudianteDashboardPage> {
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'profile') {
-                Navigator.pushNamed(context, '/estudiante/profile');
+                GoRouter.of(context).push(AppRoutes.estudianteProfile);
               } else if (value == 'logout') {
                 _mostrarDialogoLogout();
               }
@@ -508,22 +510,6 @@ class _EstudianteDashboardPageState extends State<EstudianteDashboardPage> {
                       fontSize: 14,
                       color: Colors.grey[600],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: _buildEstadisticaChip(
-                          Icons.schedule,
-                          '$totalTrimestres trimestres',
-                          Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: _buildNotaChip(promedioGeneral),
-                      ),
-                    ],
                   ),
                 ],
               ),
