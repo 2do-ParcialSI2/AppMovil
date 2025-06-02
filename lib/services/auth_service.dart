@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
 import '../models/auth_response.dart';
@@ -33,7 +34,9 @@ class AuthService {
 
       print('📥 AuthService: Respuesta del servidor: $response');
       
-      final authResponse = AuthResponse.fromJson(response);
+      // Extraer los datos del wrapper success
+      final loginData = response['data'] as Map<String, dynamic>;
+      final authResponse = AuthResponse.fromJson(loginData);
       print('✅ AuthService: AuthResponse creado exitosamente');
       print('🎫 AuthService: Token recibido: ${authResponse.token.substring(0, 20)}...');
       print('👤 AuthService: Usuario: ${authResponse.user.email}');
@@ -84,7 +87,10 @@ class AuthService {
     try {
       final refreshToken = await getRefreshToken();
       if (refreshToken == null) {
-        throw ApiError(message: 'No hay token de refresh disponible');
+        throw ApiError(
+          message: 'No hay token de refresh disponible',
+          statusCode: 401,
+        );
       }
 
       final request = RefreshTokenRequest(refresh: refreshToken);
@@ -104,7 +110,7 @@ class AuthService {
     }
   }
 
-  /// Verificar si el usuario está autenticado
+  /// Verificar si el usuario está autenticado (sin verificar expiración)
   Future<bool> isAuthenticated() async {
     final token = await getAccessToken();
     return token != null;
@@ -146,19 +152,9 @@ class AuthService {
     return token != null ? ApiConfig.getAuthHeaders(token) : null;
   }
 
-  /// Verificar si el token ha expirado y refrescarlo si es necesario
+  /// Obtener token válido (simple, sin refresh automático)
   Future<String?> getValidAccessToken() async {
-    String? token = await getAccessToken();
-    
-    if (token == null) {
-      return null;
-    }
-    
-    // TODO: Puedes agregar lógica para verificar si el token ha expirado
-    // decodificando el JWT y verificando el campo 'exp'
-    // Por ahora, simplemente devolvemos el token actual
-    
-    return token;
+    return await getAccessToken();
   }
 
   /// Guardar datos de autenticación después del login
@@ -203,49 +199,49 @@ class AuthService {
     Map<String, dynamic>? body,
     Map<String, dynamic>? queryParams,
   }) async {
-    final headers = await getAuthHeaders();
-    if (headers == null) {
-      throw ApiError(message: 'No hay token de acceso disponible');
+    final token = await getValidAccessToken();
+    if (token == null) {
+      throw ApiError(
+        message: 'No hay token de acceso válido',
+        statusCode: 401,
+      );
     }
 
-    try {
-      switch (method.toUpperCase()) {
-        case 'GET':
-          return await _apiService.get(endpoint, headers: headers, queryParams: queryParams);
-        case 'POST':
-          return await _apiService.post(endpoint, headers: headers, body: body);
-        case 'PUT':
-          return await _apiService.put(endpoint, headers: headers, body: body);
-        case 'DELETE':
-          return await _apiService.delete(endpoint, headers: headers);
-        default:
-          throw ApiError(message: 'Método HTTP no soportado: $method');
-      }
-    } catch (e) {
-      // Si hay error 401, intentar refrescar token
-      if (e is ApiError && e.statusCode == 401) {
-        try {
-          final newToken = await refreshAccessToken();
-          if (newToken != null) {
-            final newHeaders = ApiConfig.getAuthHeaders(newToken);
-            // Reintentar la petición con el nuevo token
-            switch (method.toUpperCase()) {
-              case 'GET':
-                return await _apiService.get(endpoint, headers: newHeaders, queryParams: queryParams);
-              case 'POST':
-                return await _apiService.post(endpoint, headers: newHeaders, body: body);
-              case 'PUT':
-                return await _apiService.put(endpoint, headers: newHeaders, body: body);
-              case 'DELETE':
-                return await _apiService.delete(endpoint, headers: newHeaders);
-            }
-          }
-        } catch (refreshError) {
-          // Si falla el refresh, propagar el error original
-          throw e;
-        }
-      }
-      throw e;
+    final headers = ApiConfig.getAuthHeaders(token);
+
+    switch (method.toUpperCase()) {
+      case 'GET':
+        return await _apiService.get(
+          endpoint,
+          headers: headers,
+          queryParams: queryParams,
+          token: token,
+        );
+      case 'POST':
+        return await _apiService.post(
+          endpoint,
+          body: body,
+          headers: headers,
+          token: token,
+        );
+      case 'PUT':
+        return await _apiService.put(
+          endpoint,
+          body: body,
+          headers: headers,
+          token: token,
+        );
+      case 'DELETE':
+        return await _apiService.delete(
+          endpoint,
+          headers: headers,
+          token: token,
+        );
+      default:
+        throw ApiError(
+          message: 'Método HTTP no soportado: $method',
+          statusCode: 400,
+        );
     }
   }
 } 

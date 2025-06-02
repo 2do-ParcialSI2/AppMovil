@@ -90,39 +90,4 @@ class RefreshTokenRequest {
       'refresh': refresh,
     };
   }
-}
-
-// Modelo para errores de API
-class ApiError implements Exception {
-  final String message;
-  final int? statusCode;
-  final Map<String, dynamic>? details;
-
-  ApiError({
-    required this.message,
-    this.statusCode,
-    this.details,
-  });
-
-  factory ApiError.fromJson(Map<String, dynamic> json) {
-    return ApiError(
-      message: json['message'] as String? ?? 
-               json['detail'] as String? ?? 
-               json['error'] as String? ?? 
-               'Error desconocido',
-      statusCode: json['status_code'] as int?,
-      details: json['details'] as Map<String, dynamic>?,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'message': message,
-      'status_code': statusCode,
-      'details': details,
-    };
-  }
-
-  @override
-  String toString() => message;
 } 

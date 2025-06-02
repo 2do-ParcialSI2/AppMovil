@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/user.dart';
 import '../models/auth_response.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 import 'package:flutter/widgets.dart';
 
 enum AuthStatus {
@@ -138,6 +139,11 @@ class AuthProvider with ChangeNotifier {
   /// Obtener headers de autorización
   Future<Map<String, String>?> getAuthHeaders() async {
     return await _authService.getAuthHeaders();
+  }
+
+  /// Obtener token de acceso directamente
+  Future<String?> getAccessToken() async {
+    return await _authService.getAccessToken(); // Método simple, sin verificación
   }
 
   /// Realizar petición autenticada
