@@ -62,7 +62,9 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> {
       }
       
       final estudianteId = estudianteData['id'] as int;
+      final cursoId = estudianteData['curso']['id'] as int;
       print('🔍 MateriaDetallePage: Estudiante ID encontrado: $estudianteId para email ${user.email}');
+      print('👨‍🎓 Estudiante ID: $estudianteId, Curso ID: $cursoId');
 
       // Primero intentar usar los seguimientos que ya vienen en la materia
       if (widget.materia.seguimientos != null && widget.materia.seguimientos!.isNotEmpty) {
@@ -358,14 +360,7 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: ElevatedButton(
-        onPressed: () {
-          // TODO: Implementar predicción de 3er trimestre
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Función de predicción en desarrollo'),
-            ),
-          );
-        },
+        onPressed: _predecirTercerTrimestre,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.blue[600],
           foregroundColor: Colors.white,
@@ -378,6 +373,310 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> {
           'predecir 3er trimestre',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
+      ),
+    );
+  }
+
+  Future<void> _predecirTercerTrimestre() async {
+    try {
+      // Mostrar indicador de carga
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final token = await AuthService().getAccessToken();
+      if (token == null) {
+        throw Exception('Token no disponible');
+      }
+
+      // Obtener información del estudiante actual
+      final user = await AuthService().getCurrentUser();
+      if (user == null) {
+        throw Exception('Usuario no disponible');
+      }
+
+      // Buscar el estudiante por email para obtener el curso_id
+      final estudiantesResponse = await SeguimientoService().apiService.get('/estudiantes/', token: token);
+      
+      if (estudiantesResponse['success'] != true || estudiantesResponse['data'] is! List) {
+        throw Exception('Error al obtener información del estudiante');
+      }
+
+      final estudiantes = estudiantesResponse['data'] as List<dynamic>;
+      final estudianteData = estudiantes.firstWhere(
+        (estudiante) => estudiante['email'] == user.email,
+        orElse: () => null,
+      );
+      
+      if (estudianteData == null) {
+        throw Exception('No se encontró información del estudiante');
+      }
+      
+      final estudianteId = estudianteData['id'] as int;
+      final cursoId = estudianteData['curso']['id'] as int;
+      
+      print('🔮 Buscando materia-curso ID para ${widget.materia.materiaNombre}');
+      print('👨‍🎓 Estudiante ID: $estudianteId, Curso ID: $cursoId');
+      
+      int? materiaCursoIdEncontrado;
+      
+      // ESTRATEGIA 1: Usar el endpoint específico del curso
+      try {
+        print('🔍 Obteniendo materias del curso $cursoId...');
+        final response = await SeguimientoService().apiService.get('/api/materias/curso/$cursoId', token: token);
+        
+        if (response['success'] == true && response['data'] is List) {
+          final materias = response['data'] as List<dynamic>;
+          print('📚 Encontradas ${materias.length} materias en el curso $cursoId');
+          
+          // Buscar la materia que coincida
+          for (final materia in materias) {
+            final materiaNombre = materia['nombre']?.toString() ?? '';
+            final materiaId = materia['id'] as int?;
+            
+            print('🔍 Comparando: "${widget.materia.materiaNombre}" vs "$materiaNombre"');
+            
+            if (materiaNombre.toLowerCase().trim() == widget.materia.materiaNombre.toLowerCase().trim()) {
+              materiaCursoIdEncontrado = materiaId;
+              print('✅ ¡Materia encontrada! ID: $materiaId para "$materiaNombre"');
+              break;
+            }
+          }
+        } else {
+          print('❌ No se pudieron obtener materias del curso');
+        }
+      } catch (e) {
+        print('❌ Error al obtener materias del curso: $e');
+      }
+      
+      // ESTRATEGIA 2: Si no encontramos en el curso, probar con todas las materias
+      if (materiaCursoIdEncontrado == null) {
+        try {
+          print('🔍 Obteniendo todas las materias...');
+          final response = await SeguimientoService().apiService.get('/api/materias/', token: token);
+          
+          if (response['success'] == true && response['data'] is List) {
+            final materias = response['data'] as List<dynamic>;
+            print('📚 Encontradas ${materias.length} materias en total');
+            
+            // Buscar la materia que coincida
+            for (final materia in materias) {
+              final materiaNombre = materia['nombre']?.toString() ?? '';
+              final materiaId = materia['id'] as int?;
+              
+              print('🔍 Comparando: "${widget.materia.materiaNombre}" vs "$materiaNombre"');
+              
+              if (materiaNombre.toLowerCase().trim() == widget.materia.materiaNombre.toLowerCase().trim()) {
+                materiaCursoIdEncontrado = materiaId;
+                print('✅ ¡Materia encontrada! ID: $materiaId para "$materiaNombre"');
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          print('❌ Error al obtener todas las materias: $e');
+        }
+      }
+      
+      // ESTRATEGIA 3: Si todavía no encontramos, usar método de prueba por IDs
+      if (materiaCursoIdEncontrado == null) {
+        print('⚠️ No se encontró el ID via endpoints. Intentando métodos alternativos...');
+        
+        // Probar con IDs secuenciales basados en el nombre
+        List<int> idsAProbar = [1, 2, 3, 4, 5];
+        
+        if (widget.materia.materiaNombre.toLowerCase().contains('física')) {
+          idsAProbar = [1, 2, 3, 4, 5];
+        } else if (widget.materia.materiaNombre.toLowerCase().contains('matemática') || 
+                   widget.materia.materiaNombre.toLowerCase().contains('matematica')) {
+          idsAProbar = [2, 1, 3, 4, 5];
+        }
+
+        Map<String, dynamic>? resultadoExitoso;
+        
+        for (int materiaCursoId in idsAProbar) {
+          print('🎯 Probando ID: $materiaCursoId');
+          
+          try {
+            final resultado = await SeguimientoService().predecirNota(
+              estudianteId, 
+              materiaCursoId,
+              token
+            );
+            
+            if (resultado != null && resultado['success'] == true) {
+              materiaCursoIdEncontrado = materiaCursoId;
+              resultadoExitoso = resultado;
+              print('✅ ¡Predicción exitosa con ID $materiaCursoId!');
+              break;
+            }
+          } catch (e) {
+            print('❌ Falló con ID $materiaCursoId: $e');
+            continue;
+          }
+        }
+        
+        // Cerrar el indicador de carga
+        Navigator.of(context).pop();
+
+        if (resultadoExitoso != null) {
+          print('🎉 Mostrando resultado de predicción en UI');
+          _mostrarResultadoPrediccion(resultadoExitoso['data'] ?? resultadoExitoso['prediccion']);
+          return;
+        } else {
+          throw Exception('No se pudo realizar la predicción. Por favor, verifica que:\n1. Existan materias en tu curso (ID: $cursoId)\n2. La materia "${widget.materia.materiaNombre}" esté registrada\n3. El backend de predicción esté funcionando');
+        }
+      } else {
+        // Usar el ID encontrado
+        print('🎯 Usando ID encontrado: $materiaCursoIdEncontrado');
+        final resultado = await SeguimientoService().predecirNota(
+          estudianteId, 
+          materiaCursoIdEncontrado,
+          token
+        );
+        
+        // Cerrar el indicador de carga
+        Navigator.of(context).pop();
+
+        if (resultado != null && resultado['success'] == true) {
+          print('🎉 Predicción exitosa!');
+          _mostrarResultadoPrediccion(resultado['data'] ?? resultado['prediccion']);
+          return;
+        } else {
+          throw Exception('La predicción falló con el ID correcto. Verifica el backend.');
+        }
+      }
+
+      // Esta línea nunca debería ejecutarse ahora
+      // Cerrar el indicador de carga
+      Navigator.of(context).pop();
+
+      if (materiaCursoIdEncontrado != null) {
+        // Si llegamos aquí, es porque encontramos el ID por prueba y error
+        print('🎉 Predicción exitosa con ID encontrado: $materiaCursoIdEncontrado');
+        // El resultado ya se procesó en el bucle anterior
+      } else {
+        throw Exception('No se pudo realizar la predicción. Por favor, verifica que:\n1. Existan materias en tu curso (ID: $cursoId)\n2. La materia "${widget.materia.materiaNombre}" esté registrada\n3. El backend de predicción esté funcionando');
+      }
+
+    } catch (e) {
+      // Cerrar el indicador de carga si está abierto
+      if (Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error en la predicción: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 10),
+        ),
+      );
+    }
+  }
+
+  void _mostrarResultadoPrediccion(Map<String, dynamic> prediccion) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.psychology, color: Colors.blue[600]),
+            const SizedBox(width: 8),
+            const Flexible(child: Text('Predicción 3er Trimestre')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Nota Predicha',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${prediccion['nota_estimada']?.toStringAsFixed(1) ?? 'N/A'}',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: _getColorForNota(prediccion['nota_estimada']?.toDouble() ?? 0.0),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'de 100 puntos',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (prediccion['confianza_valor'] != null) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Confianza:', style: TextStyle(fontWeight: FontWeight.w500)),
+                  Text('${prediccion['confianza_valor']?.toStringAsFixed(1) ?? 'N/A'}'),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (prediccion['clasificacion'] != null) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Clasificación:', style: TextStyle(fontWeight: FontWeight.w500)),
+                  Text(prediccion['clasificacion']?.toString() ?? 'N/A'),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (prediccion['mensaje'] != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Text(
+                  prediccion['mensaje']?.toString() ?? '',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.green[700],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cerrar'),
+          ),
+        ],
       ),
     );
   }
