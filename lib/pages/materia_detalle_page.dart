@@ -1,198 +1,133 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
 import '../models/seguimiento_models.dart';
 import '../services/seguimiento_service.dart';
+import '../services/auth_service.dart';
+import '../pages/trimestre_detalle_page.dart';
 
 class MateriaDetallePage extends StatefulWidget {
-  final int seguimientoId;
-  final String materiaNombre;
-  final String docenteNombre;
+  final EstudianteMateria materia;
 
-  const MateriaDetallePage({
-    Key? key,
-    required this.seguimientoId,
-    required this.materiaNombre,
-    required this.docenteNombre,
-  }) : super(key: key);
+  const MateriaDetallePage({super.key, required this.materia});
 
   @override
   State<MateriaDetallePage> createState() => _MateriaDetallePageState();
 }
 
-class _MateriaDetallePageState extends State<MateriaDetallePage> with TickerProviderStateMixin {
-  late TabController _tabController;
-  final SeguimientoService _seguimientoService = SeguimientoService();
-  
-  // Estados de carga para cada tab
-  bool _tareasLoading = true;
-  bool _participacionesLoading = true;
-  bool _asistenciasLoading = true;
-  bool _examenesLoading = true;
-  
-  // Datos para cada tab
-  List<Tarea> _tareas = [];
-  List<Participacion> _participaciones = [];
-  List<Asistencia> _asistencias = [];
-  List<Examen> _examenes = [];
-  
-  // Errores para cada tab
-  String? _tareasError;
-  String? _participacionesError;
-  String? _asistenciasError;
-  String? _examenesError;
+class _MateriaDetallePageState extends State<MateriaDetallePage> {
+  List<SeguimientoDetallado> _seguimientos = [];
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _cargarDatos();
+    _cargarSeguimientos();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
+  Future<void> _cargarSeguimientos() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
-  Future<void> _cargarDatos() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final token = await authProvider.getAccessToken();
-
-    if (token == null) {
-      _mostrarError('Usuario no autenticado');
-      return;
-    }
-
-    // Cargar todos los datos en paralelo
-    await Future.wait([
-      _cargarTareas(token),
-      _cargarParticipaciones(token),
-      _cargarAsistencias(token),
-      _cargarExamenes(token),
-    ]);
-  }
-
-  Future<void> _cargarTareas(String token) async {
     try {
-      setState(() {
-        _tareasLoading = true;
-        _tareasError = null;
-      });
+      final token = await AuthService().getAccessToken();
+      if (token == null) {
+        throw Exception('Token no disponible');
+      }
 
-      final tareas = await _seguimientoService.obtenerTareasPorSeguimiento(
-        widget.seguimientoId, 
+      // Obtener información del estudiante actual
+      final user = await AuthService().getCurrentUser();
+      if (user == null) {
+        throw Exception('Usuario no disponible');
+      }
+
+      print('🔍 MateriaDetallePage: Usuario actual ID: ${user.id} (${user.email})');
+
+      // Obtener el estudiante_id real que corresponde a este email
+      final estudiantesResponse = await SeguimientoService().apiService.get('/estudiantes/', token: token);
+      
+      if (estudiantesResponse['success'] != true || estudiantesResponse['data'] is! List) {
+        throw Exception('Error al obtener lista de estudiantes');
+      }
+
+      final estudiantes = estudiantesResponse['data'] as List<dynamic>;
+      final estudianteData = estudiantes.firstWhere(
+        (estudiante) => estudiante['email'] == user.email,
+        orElse: () => null,
+      );
+      
+      if (estudianteData == null) {
+        throw Exception('No se encontró información del estudiante para ${user.email}');
+      }
+      
+      final estudianteId = estudianteData['id'] as int;
+      print('🔍 MateriaDetallePage: Estudiante ID encontrado: $estudianteId para email ${user.email}');
+
+      // Primero intentar usar los seguimientos que ya vienen en la materia
+      if (widget.materia.seguimientos != null && widget.materia.seguimientos!.isNotEmpty) {
+        print('🔍 MateriaDetallePage: Usando seguimientos ya cargados (${widget.materia.seguimientos!.length})');
+        
+        // Cargar detalles completos FILTRADOS para cada seguimiento
+        List<SeguimientoDetallado> seguimientosDetallados = [];
+        
+        for (final seguimiento in widget.materia.seguimientos!) {
+          print('🔍 Cargando detalles FILTRADOS para seguimiento ${seguimiento.id} - ${seguimiento.trimestreNombre}');
+          
+          // Usar el método manual que filtra correctamente por trimestre
+          final detalles = await SeguimientoService().obtenerDetallesSeguimientoManual(
+            seguimiento.id,
+            estudianteId,
+            seguimiento.materiaNombre,
+            seguimiento.trimestreNombre,
+            token,
+          );
+          
+          if (detalles != null) {
+            seguimientosDetallados.add(detalles);
+            print('✅ Detalles FILTRADOS cargados: T:${detalles.tareas?.length ?? 0} P:${detalles.participaciones?.length ?? 0} A:${detalles.asistencias?.length ?? 0} E:${detalles.examenes?.length ?? 0}');
+          }
+        }
+        
+        setState(() {
+          _seguimientos = seguimientosDetallados;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Fallback: Obtener seguimientos específicos de esta materia
+      final seguimientos = await SeguimientoService().obtenerSeguimientosPorMateria(
+        estudianteId,
+        widget.materia.materiaNombre,
         token,
       );
 
-      if (mounted) {
-        setState(() {
-          _tareas = tareas;
-          _tareasLoading = false;
-        });
+      // Cargar detalles FILTRADOS para cada seguimiento
+      List<SeguimientoDetallado> seguimientosDetallados = [];
+      for (final seguimiento in seguimientos) {
+        final detalles = await SeguimientoService().obtenerDetallesSeguimientoManual(
+          seguimiento.id,
+          estudianteId,
+          seguimiento.materiaNombre,
+          seguimiento.trimestreNombre,
+          token,
+        );
+        if (detalles != null) {
+          seguimientosDetallados.add(detalles);
+        }
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _tareasError = e.toString();
-          _tareasLoading = false;
-        });
-      }
-    }
-  }
 
-  Future<void> _cargarParticipaciones(String token) async {
-    try {
       setState(() {
-        _participacionesLoading = true;
-        _participacionesError = null;
+        _seguimientos = seguimientosDetallados;
+        _isLoading = false;
       });
 
-      final participaciones = await _seguimientoService.obtenerParticipacionesPorSeguimiento(
-        widget.seguimientoId, 
-        token,
-      );
-
-      if (mounted) {
-        setState(() {
-          _participaciones = participaciones;
-          _participacionesLoading = false;
-        });
-      }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _participacionesError = e.toString();
-          _participacionesLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _cargarAsistencias(String token) async {
-    try {
       setState(() {
-        _asistenciasLoading = true;
-        _asistenciasError = null;
+        _error = 'Error al cargar seguimientos: $e';
+        _isLoading = false;
       });
-
-      final asistencias = await _seguimientoService.obtenerAsistenciasPorSeguimiento(
-        widget.seguimientoId, 
-        token,
-      );
-
-      if (mounted) {
-        setState(() {
-          _asistencias = asistencias;
-          _asistenciasLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _asistenciasError = e.toString();
-          _asistenciasLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _cargarExamenes(String token) async {
-    try {
-      setState(() {
-        _examenesLoading = true;
-        _examenesError = null;
-      });
-
-      final examenes = await _seguimientoService.obtenerExamenesPorSeguimiento(
-        widget.seguimientoId, 
-        token,
-      );
-
-      if (mounted) {
-        setState(() {
-          _examenes = examenes;
-          _examenesLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _examenesError = e.toString();
-          _examenesLoading = false;
-        });
-      }
-    }
-  }
-
-  void _mostrarError(String mensaje) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(mensaje),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 
@@ -200,301 +135,41 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> with TickerProv
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.materiaNombre,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              'Detalle',
-              style: TextStyle(fontSize: 14, color: Colors.grey[300]),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.blue[600],
+        title: Text(widget.materia.materiaNombre),
+        backgroundColor: Colors.blue[700],
         foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: false,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: const [
-            Tab(text: 'Tareas'),
-            Tab(text: 'Participación'),
-            Tab(text: 'Asistencias'),
-            Tab(text: 'Exámenes'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildTareasTab(),
-          _buildParticipacionTab(),
-          _buildAsistenciasTab(),
-          _buildExamenesTab(),
-        ],
-      ),
+      body: _buildBody(),
     );
   }
 
-  // ========================= TAB TAREAS =========================
-  Widget _buildTareasTab() {
-    if (_tareasLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_tareasError != null) {
-      return _buildErrorWidget(_tareasError!, () => _cargarTareas);
-    }
-
-    if (_tareas.isEmpty) {
+  Widget _buildBody() {
+    if (_isLoading) {
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.assignment_outlined, size: 64, color: Colors.grey),
+            CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('No hay tareas registradas', style: TextStyle(fontSize: 16, color: Colors.grey)),
+            Text('Cargando seguimientos...'),
           ],
         ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final token = await authProvider.getAccessToken();
-        if (token != null) await _cargarTareas(token);
-      },
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _tareas.length,
-        itemBuilder: (context, index) {
-          final tarea = _tareas[index];
-          return _buildTareaCard(tarea);
-        },
-      ),
-    );
-  }
-
-  Widget _buildTareaCard(Tarea tarea) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.assignment,
-                color: Colors.blue[600],
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tarea.fechaFormateada,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    tarea.titulo ?? 'Tarea sin título',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  if (tarea.descripcion != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      tarea.descripcion!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: _getNotaColor(tarea.notaTarea).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                tarea.notaTarea.toStringAsFixed(1),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _getNotaColor(tarea.notaTarea),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ========================= TAB PARTICIPACIÓN =========================
-  Widget _buildParticipacionTab() {
-    if (_participacionesLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_participacionesError != null) {
-      return _buildErrorWidget(_participacionesError!, () => _cargarParticipaciones);
-    }
-
-    if (_participaciones.isEmpty) {
-      return const Center(
+    if (_error != null) {
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.forum_outlined, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('No hay participaciones registradas', style: TextStyle(fontSize: 16, color: Colors.grey)),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () async {
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final token = await authProvider.getAccessToken();
-        if (token != null) await _cargarParticipaciones(token);
-      },
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _participaciones.length,
-        itemBuilder: (context, index) {
-          final participacion = _participaciones[index];
-          return _buildParticipacionCard(participacion);
-        },
-      ),
-    );
-  }
-
-  Widget _buildParticipacionCard(Participacion participacion) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.forum,
-                color: Colors.green[600],
-                size: 28,
-              ),
+            Icon(Icons.error_outline, size: 64, color: Colors.red[400]),
+            const SizedBox(height: 16),
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _cargarSeguimientos,
+              child: const Text('Reintentar'),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    participacion.fechaFormateada,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Participación en clase',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  if (participacion.descripcion != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      participacion.descripcion!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: _getNotaColor(participacion.notaParticipacion).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                participacion.notaParticipacion.toStringAsFixed(1),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _getNotaColor(participacion.notaParticipacion),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ========================= TAB ASISTENCIAS =========================
-  Widget _buildAsistenciasTab() {
-    if (_asistenciasLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_asistenciasError != null) {
-      return _buildErrorWidget(_asistenciasError!, () => _cargarAsistencias);
-    }
-
-    if (_asistencias.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.event_available_outlined, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('No hay registros de asistencia', style: TextStyle(fontSize: 16, color: Colors.grey)),
           ],
         ),
       );
@@ -502,299 +177,372 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> with TickerProv
 
     return Column(
       children: [
-        _buildAsistenciasSummary(),
+        // Header con información de la materia
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          color: Colors.grey[50],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.materia.materiaNombre,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.person, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Prof. ${widget.materia.docenteCompleto}',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.class_, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    widget.materia.cursoNombre,
+                    style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        // Lista de trimestres
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: () async {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              final token = await authProvider.getAccessToken();
-              if (token != null) await _cargarAsistencias(token);
-            },
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _asistencias.length,
-              itemBuilder: (context, index) {
-                final asistencia = _asistencias[index];
-                return _buildAsistenciaCard(asistencia);
-              },
+          child: _seguimientos.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.school_outlined, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text('No hay seguimientos disponibles'),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _seguimientos.length + 1, // +1 para el botón de predicción
+                  itemBuilder: (context, index) {
+                    if (index == _seguimientos.length) {
+                      // Botón de predicción para 3er trimestre
+                      return _buildPrediccionCard();
+                    }
+                    
+                    final seguimiento = _seguimientos[index];
+                    return _buildTrimestreCard(seguimiento, index + 1);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrimestreCard(SeguimientoDetallado seguimiento, int numeroTrimestre) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.purple[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple[200]!),
+      ),
+      child: Column(
+        children: [
+          // Header del trimestre
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue[600],
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
+              ),
             ),
+            child: Row(
+              children: [
+                Text(
+                  '${numeroTrimestre}° trimestre',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => _verDetallesTrimestre(seguimiento),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.blue[700],
+                  ),
+                  child: const Text('ver detalles'),
+                ),
+              ],
+            ),
+          ),
+          // Contenido del trimestre
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // Estadísticas principales con promedios calculados
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildStatConPromedio('Tareas', seguimiento.tareas?.length ?? 0, seguimiento.promedioTareas),
+                    _buildStatConPromedio('Participación', seguimiento.participaciones?.length ?? 0, seguimiento.promedioParticipaciones),
+                    _buildStatConAsistencia('Asistencia', seguimiento.asistencias?.length ?? 0, seguimiento.porcentajeAsistencia),
+                    _buildStatConPromedio('exámenes', seguimiento.examenes?.length ?? 0, seguimiento.promedioExamenes),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Nota trimestral
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Nota Trimestral',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        seguimiento.notaTrimestral.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: _getColorForNota(seguimiento.notaTrimestral),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'de 100 puntos',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrediccionCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: ElevatedButton(
+        onPressed: () {
+          // TODO: Implementar predicción de 3er trimestre
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Función de predicción en desarrollo'),
+            ),
+          );
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blue[600],
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: const Text(
+          'predecir 3er trimestre',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatConPromedio(String label, int cantidad, double promedio) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          cantidad.toString(),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        if (promedio > 0) ...[
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _getColorForNota(promedio).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Prom: ${promedio.toStringAsFixed(1)}',
+              style: TextStyle(
+                fontSize: 10,
+                color: _getColorForNota(promedio),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStatConAsistencia(String label, int cantidad, double porcentaje) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          cantidad.toString(),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        if (porcentaje > 0) ...[
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _getColorForAsistencia(porcentaje).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${porcentaje.toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontSize: 10,
+                color: _getColorForAsistencia(porcentaje),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ] else ...[
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.grey.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'S/D',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Color _getColorForNota(double nota) {
+    if (nota >= 80) return Colors.green;
+    if (nota >= 70) return Colors.orange;
+    if (nota >= 60) return Colors.amber;
+    return Colors.red;
+  }
+
+  Color _getColorForAsistencia(double porcentaje) {
+    if (porcentaje >= 90) return Colors.green;
+    if (porcentaje >= 80) return Colors.orange;
+    if (porcentaje >= 70) return Colors.amber;
+    return Colors.red;
+  }
+
+  Widget _buildStat(String label, int value) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value.toString(),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildAsistenciasSummary() {
-    final totalClases = _asistencias.length;
-    final clasesAsistidas = _asistencias.where((a) => a.asistencia).length;
-    final porcentaje = totalClases > 0 ? (clasesAsistidas / totalClases * 100) : 0.0;
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.blue[50],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.analytics, color: Colors.blue[600], size: 32),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Resumen de Asistencia',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue[800],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$clasesAsistidas de $totalClases clases (${porcentaje.toStringAsFixed(1)}%)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.blue[600],
-                  ),
-                ),
-              ],
-            ),
+  Widget _buildNotaStat(String label, double value) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: _getAsistenciaColor(porcentaje),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              '${porcentaje.toStringAsFixed(1)}%',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAsistenciaCard(Asistencia asistencia) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: asistencia.asistencia ? Colors.green[50] : Colors.red[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                asistencia.asistencia ? Icons.check_circle : Icons.cancel,
-                color: asistencia.asistencia ? Colors.green[600] : Colors.red[600],
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    asistencia.fechaFormateada,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    asistencia.estadoTexto,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: asistencia.asistencia ? Colors.green[600] : Colors.red[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
-      ),
-    );
-  }
-
-  // ========================= TAB EXÁMENES =========================
-  Widget _buildExamenesTab() {
-    if (_examenesLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_examenesError != null) {
-      return _buildErrorWidget(_examenesError!, () => _cargarExamenes);
-    }
-
-    if (_examenes.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.quiz_outlined, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('No hay exámenes registrados', style: TextStyle(fontSize: 16, color: Colors.grey)),
-          ],
+        const SizedBox(height: 4),
+        Text(
+          value.toStringAsFixed(0),
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () async {
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final token = await authProvider.getAccessToken();
-        if (token != null) await _cargarExamenes(token);
-      },
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _examenes.length,
-        itemBuilder: (context, index) {
-          final examen = _examenes[index];
-          return _buildExamenCard(examen);
-        },
-      ),
+      ],
     );
   }
 
-  Widget _buildExamenCard(Examen examen) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.purple[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.quiz,
-                color: Colors.purple[600],
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    examen.fechaFormateada,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    examen.tipoExamenNombre ?? 'Examen',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  if (examen.observaciones != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      examen.observaciones!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: _getNotaColor(examen.notaExamen).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                examen.notaExamen.toStringAsFixed(1),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _getNotaColor(examen.notaExamen),
-                ),
-              ),
-            ),
-          ],
-        ),
+  void _verDetallesTrimestre(SeguimientoDetallado seguimiento) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TrimestreDetallePage(seguimiento: seguimiento),
       ),
     );
-  }
-
-  // ========================= WIDGETS COMUNES =========================
-  Widget _buildErrorWidget(String error, Function() retry) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-          const SizedBox(height: 16),
-          Text(
-            'Error al cargar datos',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red[700]),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () async {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              final token = await authProvider.getAccessToken();
-              if (token != null) retry();
-            },
-            child: const Text('Reintentar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getNotaColor(double nota) {
-    if (nota >= 70) return Colors.green;
-    if (nota >= 60) return Colors.orange;
-    return Colors.red;
-  }
-
-  Color _getAsistenciaColor(double porcentaje) {
-    if (porcentaje >= 80) return Colors.green;
-    if (porcentaje >= 60) return Colors.orange;
-    return Colors.red;
   }
 } 

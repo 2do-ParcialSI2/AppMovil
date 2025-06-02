@@ -87,7 +87,7 @@ class _EstudianteDashboardPageState extends State<EstudianteDashboardPage> {
 
       // Intentar obtener las materias del estudiante
       try {
-        final materias = await _seguimientoService.obtenerMateriasCompletasEstudiante(estudianteId, token);
+        final materias = await _seguimientoService.obtenerMateriasEstudiante(estudianteId, token);
         
         if (mounted) {
           setState(() {
@@ -461,6 +461,15 @@ class _EstudianteDashboardPageState extends State<EstudianteDashboardPage> {
   }
 
   Widget _buildMateriaCard(EstudianteMateria materia) {
+    // Calcular estadísticas de los seguimientos
+    int totalTrimestres = materia.seguimientos?.length ?? 0;
+    double promedioGeneral = 0.0;
+    
+    if (materia.seguimientos != null && materia.seguimientos!.isNotEmpty) {
+      final sumaNotas = materia.seguimientos!.fold(0.0, (sum, s) => sum + s.notaTrimestral);
+      promedioGeneral = sumaNotas / materia.seguimientos!.length;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -503,13 +512,17 @@ class _EstudianteDashboardPageState extends State<EstudianteDashboardPage> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      _buildEstadisticaChip(
-                        Icons.assignment,
-                        '${materia.totalTareas} tareas',
-                        Colors.blue,
+                      Flexible(
+                        child: _buildEstadisticaChip(
+                          Icons.schedule,
+                          '$totalTrimestres trimestres',
+                          Colors.blue,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      _buildNotaChip(materia.notaTrimestral),
+                      Flexible(
+                        child: _buildNotaChip(promedioGeneral),
+                      ),
                     ],
                   ),
                 ],
@@ -636,9 +649,7 @@ class _EstudianteDashboardPageState extends State<EstudianteDashboardPage> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => MateriaDetallePage(
-          seguimientoId: materia.seguimientoId,
-          materiaNombre: materia.materiaNombre,
-          docenteNombre: materia.docenteCompleto,
+          materia: materia,
         ),
       ),
     );

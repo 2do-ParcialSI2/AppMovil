@@ -64,6 +64,10 @@ class SeguimientoDetallado {
   final String trimestreNombre;
   final String docenteNombre;
   final String docenteApellido;
+  final List<Tarea>? tareas;
+  final List<Participacion>? participaciones;
+  final List<Asistencia>? asistencias;
+  final List<Examen>? examenes;
 
   SeguimientoDetallado({
     required this.id,
@@ -75,6 +79,10 @@ class SeguimientoDetallado {
     required this.trimestreNombre,
     required this.docenteNombre,
     required this.docenteApellido,
+    this.tareas,
+    this.participaciones,
+    this.asistencias,
+    this.examenes,
   });
 
   factory SeguimientoDetallado.fromJson(Map<String, dynamic> json) {
@@ -93,6 +101,52 @@ class SeguimientoDetallado {
 
   String get nombreCompleto => '$estudianteNombre $estudianteApellido';
   String get docenteCompleto => '$docenteNombre $docenteApellido';
+  
+  /// Calcular promedio de tareas
+  double get promedioTareas {
+    if (tareas == null || tareas!.isEmpty) return 0.0;
+    final suma = tareas!.fold(0.0, (sum, tarea) => sum + tarea.notaTarea);
+    return suma / tareas!.length;
+  }
+  
+  /// Calcular promedio de participaciones
+  double get promedioParticipaciones {
+    if (participaciones == null || participaciones!.isEmpty) return 0.0;
+    final suma = participaciones!.fold(0.0, (sum, participacion) => sum + participacion.notaParticipacion);
+    return suma / participaciones!.length;
+  }
+  
+  /// Calcular promedio de exámenes
+  double get promedioExamenes {
+    if (examenes == null || examenes!.isEmpty) return 0.0;
+    final suma = examenes!.fold(0.0, (sum, examen) => sum + examen.notaExamen);
+    return suma / examenes!.length;
+  }
+  
+  /// Calcular porcentaje de asistencia
+  double get porcentajeAsistencia {
+    if (asistencias == null || asistencias!.isEmpty) return 0.0;
+    final totalAsistencias = asistencias!.where((a) => a.asistencia).length;
+    return (totalAsistencias / asistencias!.length) * 100;
+  }
+  
+  /// Calcular nota trimestral usando la misma fórmula del backend
+  /// Fórmula: tareas 25% + participaciones 15% + exámenes 50% + asistencia 10%
+  double calcularNotaTrimestralLocal() {
+    final promTareas = promedioTareas;
+    final promParticipaciones = promedioParticipaciones;
+    final promExamenes = promedioExamenes;
+    final porcAsistencia = porcentajeAsistencia;
+    
+    final notaCalculada = (
+      promTareas * 0.25 +
+      promParticipaciones * 0.15 +
+      promExamenes * 0.50 +
+      (porcAsistencia / 100) * 0.10
+    );
+    
+    return double.parse(notaCalculada.toStringAsFixed(2));
+  }
 }
 
 class Tarea {
@@ -343,7 +397,10 @@ class Materia {
 
 class EstudianteMateria {
   final int seguimientoId;
+  final int? materiaId; // ID de la materia (opcional para materias únicas)
+  final int? materiaCursoId; // ID de MateriaCurso (para obtener seguimientos)
   final String materiaNombre;
+  final String? descripcion; // Descripción de la materia
   final String cursoNombre;
   final String trimestreNombre;
   final String docenteCompleto;
@@ -352,10 +409,14 @@ class EstudianteMateria {
   final int totalParticipaciones;
   final int totalAsistencias;
   final int totalExamenes;
+  final List<SeguimientoDetallado>? seguimientos; // Lista de seguimientos por trimestre
 
   EstudianteMateria({
     required this.seguimientoId,
+    this.materiaId,
+    this.materiaCursoId,
     required this.materiaNombre,
+    this.descripcion,
     required this.cursoNombre,
     required this.trimestreNombre,
     required this.docenteCompleto,
@@ -364,6 +425,7 @@ class EstudianteMateria {
     required this.totalParticipaciones,
     required this.totalAsistencias,
     required this.totalExamenes,
+    this.seguimientos,
   });
 
   factory EstudianteMateria.fromSeguimientoDetallado(SeguimientoDetallado seguimiento) {
@@ -378,6 +440,34 @@ class EstudianteMateria {
       totalParticipaciones: 0,
       totalAsistencias: 0,
       totalExamenes: 0,
+    );
+  }
+
+  /// Factory para crear una materia única desde datos del curso
+  factory EstudianteMateria.fromMateriaCompleta({
+    required int materiaId,
+    required int materiaCursoId,
+    required String materiaNombre,
+    String? descripcion,
+    required String docenteCompleto,
+    String cursoNombre = '',
+    List<SeguimientoDetallado>? seguimientos,
+  }) {
+    return EstudianteMateria(
+      seguimientoId: 0, // No aplica para materias únicas
+      materiaId: materiaId,
+      materiaCursoId: materiaCursoId,
+      materiaNombre: materiaNombre,
+      descripcion: descripcion,
+      cursoNombre: cursoNombre,
+      trimestreNombre: '', // No aplica para materias únicas
+      docenteCompleto: docenteCompleto,
+      notaTrimestral: 0.0, // Se calculará del promedio de seguimientos
+      totalTareas: 0,
+      totalParticipaciones: 0,
+      totalAsistencias: 0,
+      totalExamenes: 0,
+      seguimientos: seguimientos,
     );
   }
 } 

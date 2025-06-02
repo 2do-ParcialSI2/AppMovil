@@ -133,16 +133,21 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     final userJson = prefs.getString(_userKey);
     
+    print('🔍 AuthService.getCurrentUser: userJson = $userJson');
+    
     if (userJson != null) {
       try {
         final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        return User.fromJson(userMap);
+        final user = User.fromJson(userMap);
+        print('🔍 AuthService.getCurrentUser: user.id = ${user.id}, email = ${user.email}');
+        return user;
       } catch (e) {
         print('Error al decodificar datos del usuario: $e');
         return null;
       }
     }
     
+    print('🔍 AuthService.getCurrentUser: No hay datos de usuario guardados');
     return null;
   }
 
