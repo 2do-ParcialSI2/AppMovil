@@ -292,34 +292,77 @@ class _EstudianteDashboardPageParaPadreState extends State<EstudianteDashboardPa
         onTap: () => _verDetalleMateria(materia),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              // Encabezado de la materia
-              Row(
+              // Icono de la materia
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: _getMateriaColor(materia.materiaNombre).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  _getMateriaIcon(materia.materiaNombre),
+                  color: _getMateriaColor(materia.materiaNombre),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Información de la materia
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      materia.materiaNombre,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Prof. ${materia.docenteCompleto}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    if (materia.cursoNombre.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        materia.cursoNombre,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // Indicador de trimestres disponibles
+              Column(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          materia.materiaNombre,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Prof. ${materia.docenteCompleto}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange[200]!),
+                    ),
+                    child: Text(
+                      '${materia.seguimientos?.length ?? 0} trimestres',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange[700],
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 8),
                   Icon(
                     Icons.arrow_forward_ios,
                     size: 16,
@@ -327,52 +370,6 @@ class _EstudianteDashboardPageParaPadreState extends State<EstudianteDashboardPa
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              // Estadísticas de actividades
-              Row(
-                children: [
-                  Flexible(child: _buildStatChip('Tareas', materia.totalTareas, Colors.blue)),
-                  const SizedBox(width: 8),
-                  Flexible(child: _buildStatChip('Participación', materia.totalParticipaciones, Colors.green)),
-                  const SizedBox(width: 8),
-                  Flexible(child: _buildStatChip('Asistencia', materia.totalAsistencias, Colors.orange)),
-                  const SizedBox(width: 8),
-                  Flexible(child: _buildStatChip('Exámenes', materia.totalExamenes, Colors.red)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Nota promedio
-              if (materia.notaTrimestral > 0) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[200]!),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Promedio General',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      Text(
-                        materia.notaTrimestral.toStringAsFixed(1),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: _getColorForNota(materia.notaTrimestral),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -380,41 +377,46 @@ class _EstudianteDashboardPageParaPadreState extends State<EstudianteDashboardPa
     );
   }
 
-  Widget _buildStatChip(String label, int value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: color,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            value.toString(),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
+  IconData _getMateriaIcon(String materiaNombre) {
+    final materiaLower = materiaNombre.toLowerCase();
+    if (materiaLower.contains('matemática') || materiaLower.contains('matemática')) {
+      return Icons.calculate;
+    } else if (materiaLower.contains('física') || materiaLower.contains('fisica')) {
+      return Icons.science;
+    } else if (materiaLower.contains('química') || materiaLower.contains('quimica')) {
+      return Icons.biotech;
+    } else if (materiaLower.contains('historia')) {
+      return Icons.history_edu;
+    } else if (materiaLower.contains('literatura') || materiaLower.contains('lengua')) {
+      return Icons.menu_book;
+    } else if (materiaLower.contains('programación') || materiaLower.contains('programacion')) {
+      return Icons.code;
+    } else if (materiaLower.contains('educación') || materiaLower.contains('educacion')) {
+      return Icons.sports_soccer;
+    } else {
+      return Icons.book;
+    }
   }
 
-  Color _getColorForNota(double nota) {
-    if (nota >= 80) return Colors.green;
-    if (nota >= 70) return Colors.orange;
-    if (nota >= 60) return Colors.amber;
-    return Colors.red;
+  Color _getMateriaColor(String materiaNombre) {
+    final materiaLower = materiaNombre.toLowerCase();
+    if (materiaLower.contains('matemática') || materiaLower.contains('matemática')) {
+      return Colors.blue[600]!;
+    } else if (materiaLower.contains('física') || materiaLower.contains('fisica')) {
+      return Colors.green[600]!;
+    } else if (materiaLower.contains('química') || materiaLower.contains('quimica')) {
+      return Colors.purple[600]!;
+    } else if (materiaLower.contains('historia')) {
+      return Colors.brown[600]!;
+    } else if (materiaLower.contains('literatura') || materiaLower.contains('lengua')) {
+      return Colors.orange[600]!;
+    } else if (materiaLower.contains('programación') || materiaLower.contains('programacion')) {
+      return Colors.indigo[600]!;
+    } else if (materiaLower.contains('educación') || materiaLower.contains('educacion')) {
+      return Colors.teal[600]!;
+    } else {
+      return Colors.grey[600]!;
+    }
   }
 
   String _getInitials() {
