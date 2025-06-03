@@ -7,6 +7,7 @@ import '../pages/home_page.dart';
 import '../pages/profile_page.dart';
 import '../pages/splash_page.dart';
 import '../pages/estudiante_dashboard_page.dart';
+import '../pages/padre_tutor_dashboard_page.dart';
 import '../pages/materia_detalle_page.dart';
 
 class AppRoutes {
@@ -15,8 +16,10 @@ class AppRoutes {
   static const String login = '/login';
   static const String home = '/home';
   static const String estudianteDashboard = '/estudiante';
+  static const String padreTutorDashboard = '/padre-tutor';
   static const String profile = '/home/profile';
   static const String estudianteProfile = '/estudiante/profile';
+  static const String padreTutorProfile = '/padre-tutor/profile';
 
   static GoRouter createRouter() {
     return GoRouter(
@@ -65,6 +68,21 @@ class AppRoutes {
             ),
           ],
         ),
+        
+        // Ruta para dashboard de padre/tutor
+        GoRoute(
+          path: padreTutorDashboard,
+          name: 'padre-tutor-dashboard',
+          builder: (context, state) => const PadreTutorDashboardPage(),
+          routes: [
+            // Subrutas para padre/tutor
+            GoRoute(
+              path: 'profile',
+              name: 'padre-tutor-profile',
+              builder: (context, state) => const ProfilePage(),
+            ),
+          ],
+        ),
       ],
       
       // Redirección basada en el estado de autenticación y rol
@@ -95,7 +113,8 @@ class AppRoutes {
           
           // Si está en un dashboard pero no es el correcto para su rol
           if ((currentPath?.startsWith('/home') == true && expectedDashboard != home) ||
-              (currentPath?.startsWith('/estudiante') == true && expectedDashboard != estudianteDashboard)) {
+              (currentPath?.startsWith('/estudiante') == true && expectedDashboard != estudianteDashboard) ||
+              (currentPath?.startsWith('/padre-tutor') == true && expectedDashboard != padreTutorDashboard)) {
             return expectedDashboard;
           }
         }
@@ -152,12 +171,12 @@ class AppRoutes {
     if (user.isEstudiante) {
       print('🎒 AppRoutes: Usuario es estudiante, redirigiendo a dashboard estudiantil');
       return estudianteDashboard;
+    } else if (user.isPadreTutor) {
+      print('👨‍👩‍👧‍👦 AppRoutes: Usuario es padre/tutor, redirigiendo a dashboard de padre/tutor');
+      return padreTutorDashboard;
     } else if (user.isDocente) {
       print('👨‍🏫 AppRoutes: Usuario es docente, redirigiendo a dashboard administrativo');
       return home; // Por ahora docentes van al mismo dashboard que admin
-    } else if (user.isPadreTutor) {
-      print('👨‍👩‍👧‍👦 AppRoutes: Usuario es padre/tutor, redirigiendo a dashboard administrativo');
-      return home; // Por ahora padres van al mismo dashboard que admin
     } else {
       print('👑 AppRoutes: Usuario es admin o sin rol específico, redirigiendo a dashboard administrativo');
       return home;
@@ -172,6 +191,8 @@ extension AppNavigation on BuildContext {
   void goToProfile() => go(AppRoutes.profile);
   void goToEstudianteDashboard() => go(AppRoutes.estudianteDashboard);
   void goToEstudianteProfile() => go(AppRoutes.estudianteProfile);
+  void goToPadreTutorDashboard() => go(AppRoutes.padreTutorDashboard);
+  void goToPadreTutorProfile() => go(AppRoutes.padreTutorProfile);
   
   /// Navegar al dashboard apropiado según el rol del usuario
   void goToDashboard() {
