@@ -539,30 +539,86 @@ class _EstudianteDashboardPageState extends State<EstudianteDashboardPage> {
   }
 
   Widget _buildMateriaIcon(String materiaNombre) {
-    IconData iconData;
-    Color iconColor;
-
-    // Asignar iconos según el nombre de la materia
     final materiaLower = materiaNombre.toLowerCase();
-    if (materiaLower.contains('matemáticas') || materiaLower.contains('matematicas')) {
-      iconData = Icons.calculate;
-      iconColor = Colors.blue[600]!;
-    } else if (materiaLower.contains('ciencias')) {
-      iconData = Icons.science;
-      iconColor = Colors.green[600]!;
-    } else if (materiaLower.contains('programación') || materiaLower.contains('programacion')) {
-      iconData = Icons.code;
-      iconColor = Colors.purple[600]!;
-    } else if (materiaLower.contains('historia')) {
-      iconData = Icons.history_edu;
-      iconColor = Colors.brown[600]!;
-    } else if (materiaLower.contains('literatura') || materiaLower.contains('lengua')) {
-      iconData = Icons.menu_book;
-      iconColor = Colors.orange[600]!;
+    
+    // Lista de iconos disponibles organizados por categorías
+    final iconosCiencias = [Icons.science, Icons.biotech, Icons.psychology, Icons.scatter_plot];
+    final iconosMatematicas = [Icons.calculate, Icons.functions, Icons.analytics, Icons.show_chart];
+    final iconosLenguaje = [Icons.menu_book, Icons.translate, Icons.create, Icons.record_voice_over];
+    final iconosSociales = [Icons.history_edu, Icons.public, Icons.groups, Icons.gavel];
+    final iconosArtes = [Icons.palette, Icons.music_note, Icons.theater_comedy, Icons.brush];
+    final iconosDeportes = [Icons.sports_soccer, Icons.sports_basketball, Icons.fitness_center, Icons.pool];
+    final iconosTecnologia = [Icons.code, Icons.computer, Icons.engineering, Icons.memory];
+    final iconosGenericos = [Icons.book, Icons.school, Icons.library_books, Icons.assignment];
+
+    // Detectar categoría por palabras clave
+    List<IconData> iconosCategoria;
+    if (materiaLower.contains('matemática') || materiaLower.contains('matematica') || 
+        materiaLower.contains('álgebra') || materiaLower.contains('algebra') ||
+        materiaLower.contains('geometría') || materiaLower.contains('geometria') ||
+        materiaLower.contains('cálculo') || materiaLower.contains('calculo') ||
+        materiaLower.contains('estadística') || materiaLower.contains('estadistica')) {
+      iconosCategoria = iconosMatematicas;
+    } else if (materiaLower.contains('física') || materiaLower.contains('fisica') ||
+               materiaLower.contains('química') || materiaLower.contains('quimica') ||
+               materiaLower.contains('biología') || materiaLower.contains('biologia') ||
+               materiaLower.contains('ciencias') || materiaLower.contains('laboratorio')) {
+      iconosCategoria = iconosCiencias;
+    } else if (materiaLower.contains('literatura') || materiaLower.contains('lengua') ||
+               materiaLower.contains('español') || materiaLower.contains('inglés') ||
+               materiaLower.contains('idioma') || materiaLower.contains('comunicación') ||
+               materiaLower.contains('redacción') || materiaLower.contains('lectura')) {
+      iconosCategoria = iconosLenguaje;
+    } else if (materiaLower.contains('historia') || materiaLower.contains('geografía') ||
+               materiaLower.contains('geografia') || materiaLower.contains('civismo') ||
+               materiaLower.contains('social') || materiaLower.contains('política') ||
+               materiaLower.contains('filosofía') || materiaLower.contains('filosofia')) {
+      iconosCategoria = iconosSociales;
+    } else if (materiaLower.contains('arte') || materiaLower.contains('música') ||
+               materiaLower.contains('musica') || materiaLower.contains('dibujo') ||
+               materiaLower.contains('pintura') || materiaLower.contains('teatro') ||
+               materiaLower.contains('danza')) {
+      iconosCategoria = iconosArtes;
+    } else if (materiaLower.contains('educación física') || materiaLower.contains('educacion fisica') ||
+               materiaLower.contains('deporte') || materiaLower.contains('gimnasia') ||
+               materiaLower.contains('natación') || materiaLower.contains('natacion')) {
+      iconosCategoria = iconosDeportes;
+    } else if (materiaLower.contains('programación') || materiaLower.contains('programacion') ||
+               materiaLower.contains('informática') || materiaLower.contains('informatica') ||
+               materiaLower.contains('computación') || materiaLower.contains('computacion') ||
+               materiaLower.contains('tecnología') || materiaLower.contains('tecnologia') ||
+               materiaLower.contains('sistemas')) {
+      iconosCategoria = iconosTecnologia;
     } else {
-      iconData = Icons.book;
-      iconColor = Colors.indigo[600]!;
+      iconosCategoria = iconosGenericos;
     }
+
+    // Seleccionar icono basado en hash del nombre para consistencia
+    final hash = materiaNombre.hashCode.abs();
+    IconData iconData = iconosCategoria[hash % iconosCategoria.length];
+
+    // Lista de colores vibrantes y diferenciados
+    final colores = [
+      Colors.blue[600]!,      // Azul
+      Colors.green[600]!,     // Verde
+      Colors.orange[600]!,    // Naranja
+      Colors.purple[600]!,    // Morado
+      Colors.red[600]!,       // Rojo
+      Colors.teal[600]!,      // Verde azulado
+      Colors.indigo[600]!,    // Índigo
+      Colors.brown[600]!,     // Marrón
+      Colors.pink[600]!,      // Rosa
+      Colors.amber[600]!,     // Ámbar
+      Colors.cyan[600]!,      // Cian
+      Colors.deepOrange[600]!, // Naranja profundo
+      Colors.lightGreen[600]!, // Verde claro
+      Colors.deepPurple[600]!, // Morado profundo
+      Colors.lime[600]!,      // Lima
+      Colors.blueGrey[600]!,  // Azul gris
+    ];
+
+    // Generar color consistente basado en hash del nombre
+    Color iconColor = colores[hash % colores.length];
 
     return Container(
       width: 50,

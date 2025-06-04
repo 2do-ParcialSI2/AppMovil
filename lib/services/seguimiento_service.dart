@@ -10,7 +10,7 @@ class SeguimientoService {
   Future<List<EstudianteMateria>> obtenerMateriasEstudiante(int estudianteId, String token) async {
     try {
       print('🔍 SeguimientoService: Obteniendo materias del estudiante $estudianteId');
-
+      
       // Obtener seguimientos usando el endpoint específico para el estudiante
       final seguimientosResponse = await apiService.get(
         '/seguimiento/seguimientos/por_estudiante/?estudiante_id=$estudianteId',

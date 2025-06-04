@@ -427,7 +427,12 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> {
       // ESTRATEGIA 1: Usar el endpoint específico del curso
       try {
         print('🔍 Obteniendo materias del curso $cursoId...');
-        final response = await SeguimientoService().apiService.get('/api/materias/curso/$cursoId', token: token);
+        final response = await SeguimientoService().apiService.get('/materias/curso/$cursoId', token: token);
+        
+        print('📊 DEBUG - Respuesta completa del endpoint materias/curso:');
+        print('   Success: ${response['success']}');
+        print('   Data type: ${response['data'].runtimeType}');
+        print('   Data content: ${response['data']}');
         
         if (response['success'] == true && response['data'] is List) {
           final materias = response['data'] as List<dynamic>;
@@ -435,10 +440,14 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> {
           
           // Buscar la materia que coincida
           for (final materia in materias) {
+            print('🔍 DEBUG - Estructura de materia: $materia');
             final materiaNombre = materia['nombre']?.toString() ?? '';
             final materiaId = materia['id'] as int?;
             
             print('🔍 Comparando: "${widget.materia.materiaNombre}" vs "$materiaNombre"');
+            print('   Buscado: "${widget.materia.materiaNombre.toLowerCase().trim()}"');
+            print('   Encontrado: "${materiaNombre.toLowerCase().trim()}"');
+            print('   Son iguales: ${materiaNombre.toLowerCase().trim() == widget.materia.materiaNombre.toLowerCase().trim()}');
             
             if (materiaNombre.toLowerCase().trim() == widget.materia.materiaNombre.toLowerCase().trim()) {
               materiaCursoIdEncontrado = materiaId;
@@ -446,8 +455,17 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> {
               break;
             }
           }
+          
+          if (materiaCursoIdEncontrado == null) {
+            print('❌ No se encontró coincidencia exacta. Materias disponibles:');
+            for (final materia in materias) {
+              print('   - "${materia['nombre']}" (ID: ${materia['id']})');
+            }
+          }
         } else {
-          print('❌ No se pudieron obtener materias del curso');
+          print('❌ Formato de respuesta inesperado:');
+          print('   Success: ${response['success']}');
+          print('   Data: ${response['data']}');
         }
       } catch (e) {
         print('❌ Error al obtener materias del curso: $e');
@@ -457,7 +475,7 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> {
       if (materiaCursoIdEncontrado == null) {
         try {
           print('🔍 Obteniendo todas las materias...');
-          final response = await SeguimientoService().apiService.get('/api/materias/', token: token);
+          final response = await SeguimientoService().apiService.get('/materias/', token: token);
           
           if (response['success'] == true && response['data'] is List) {
             final materias = response['data'] as List<dynamic>;
@@ -482,55 +500,10 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> {
         }
       }
       
-      // ESTRATEGIA 3: Si todavía no encontramos, usar método de prueba por IDs
-      if (materiaCursoIdEncontrado == null) {
-        print('⚠️ No se encontró el ID via endpoints. Intentando métodos alternativos...');
-        
-        // Probar con IDs secuenciales basados en el nombre
-        List<int> idsAProbar = [1, 2, 3, 4, 5];
-        
-        if (widget.materia.materiaNombre.toLowerCase().contains('física')) {
-          idsAProbar = [1, 2, 3, 4, 5];
-        } else if (widget.materia.materiaNombre.toLowerCase().contains('matemática') || 
-                   widget.materia.materiaNombre.toLowerCase().contains('matematica')) {
-          idsAProbar = [2, 1, 3, 4, 5];
-        }
+      // Cerrar el indicador de carga
+      Navigator.of(context).pop();
 
-        Map<String, dynamic>? resultadoExitoso;
-        
-        for (int materiaCursoId in idsAProbar) {
-          print('🎯 Probando ID: $materiaCursoId');
-          
-          try {
-            final resultado = await SeguimientoService().predecirNota(
-              estudianteId, 
-              materiaCursoId,
-              token
-            );
-            
-            if (resultado != null && resultado['success'] == true) {
-              materiaCursoIdEncontrado = materiaCursoId;
-              resultadoExitoso = resultado;
-              print('✅ ¡Predicción exitosa con ID $materiaCursoId!');
-              break;
-            }
-          } catch (e) {
-            print('❌ Falló con ID $materiaCursoId: $e');
-            continue;
-          }
-        }
-        
-        // Cerrar el indicador de carga
-        Navigator.of(context).pop();
-
-        if (resultadoExitoso != null) {
-          print('🎉 Mostrando resultado de predicción en UI');
-          _mostrarResultadoPrediccion(resultadoExitoso['data'] ?? resultadoExitoso['prediccion']);
-          return;
-        } else {
-          throw Exception('No se pudo realizar la predicción. Por favor, verifica que:\n1. Existan materias en tu curso (ID: $cursoId)\n2. La materia "${widget.materia.materiaNombre}" esté registrada\n3. El backend de predicción esté funcionando');
-        }
-      } else {
+      if (materiaCursoIdEncontrado != null) {
         // Usar el ID encontrado
         print('🎯 Usando ID encontrado: $materiaCursoIdEncontrado');
         final resultado = await SeguimientoService().predecirNota(
@@ -538,29 +511,16 @@ class _MateriaDetallePageState extends State<MateriaDetallePage> {
           materiaCursoIdEncontrado,
           token
         );
-        
-        // Cerrar el indicador de carga
-        Navigator.of(context).pop();
 
         if (resultado != null && resultado['success'] == true) {
           print('🎉 Predicción exitosa!');
           _mostrarResultadoPrediccion(resultado['data'] ?? resultado['prediccion']);
           return;
         } else {
-          throw Exception('La predicción falló con el ID correcto. Verifica el backend.');
+          throw Exception('La predicción falló. Verifica el backend de Machine Learning.');
         }
-      }
-
-      // Esta línea nunca debería ejecutarse ahora
-      // Cerrar el indicador de carga
-      Navigator.of(context).pop();
-
-      if (materiaCursoIdEncontrado != null) {
-        // Si llegamos aquí, es porque encontramos el ID por prueba y error
-        print('🎉 Predicción exitosa con ID encontrado: $materiaCursoIdEncontrado');
-        // El resultado ya se procesó en el bucle anterior
       } else {
-        throw Exception('No se pudo realizar la predicción. Por favor, verifica que:\n1. Existan materias en tu curso (ID: $cursoId)\n2. La materia "${widget.materia.materiaNombre}" esté registrada\n3. El backend de predicción esté funcionando');
+        throw Exception('No se pudo encontrar el ID de la materia "${widget.materia.materiaNombre}" en el sistema.\n\nVerifica que:\n1. La materia esté registrada correctamente\n2. Esté asignada al curso del estudiante\n3. Los nombres coincidan exactamente');
       }
 
     } catch (e) {

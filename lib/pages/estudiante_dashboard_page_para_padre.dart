@@ -4,7 +4,10 @@ import '../providers/auth_provider.dart';
 import '../models/seguimiento_models.dart';
 import '../services/seguimiento_service.dart';
 import '../services/api_service.dart';
+import '../services/matricula_service.dart';
 import '../pages/materia_detalle_page_para_padre.dart';
+import '../pages/nuevo_pago_page.dart';
+import '../pages/historial_matriculas_page.dart';
 
 class EstudianteDashboardPageParaPadre extends StatefulWidget {
   final Map<String, dynamic> estudiante;
@@ -178,6 +181,37 @@ class _EstudianteDashboardPageParaPadreState extends State<EstudianteDashboardPa
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          
+          // Botón de Pagar Matrícula
+          SizedBox(
+            width: double.infinity,
+            child: Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _irAPagarMatricula,
+                  icon: const Icon(Icons.payment, size: 18),
+                  label: const Text('Pagar Matrícula'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: _verMatriculasPagadas,
+                  icon: Icon(Icons.history, size: 18, color: Colors.blue[700]),
+                  label: Text('Ver Pagos', style: TextStyle(color: Colors.blue[700])),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.blue[700]!),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
           const SizedBox(height: 16),
           // Indicador de vista para padre
           Container(
@@ -379,44 +413,88 @@ class _EstudianteDashboardPageParaPadreState extends State<EstudianteDashboardPa
 
   IconData _getMateriaIcon(String materiaNombre) {
     final materiaLower = materiaNombre.toLowerCase();
-    if (materiaLower.contains('matemática') || materiaLower.contains('matemática')) {
-      return Icons.calculate;
-    } else if (materiaLower.contains('física') || materiaLower.contains('fisica')) {
-      return Icons.science;
-    } else if (materiaLower.contains('química') || materiaLower.contains('quimica')) {
-      return Icons.biotech;
-    } else if (materiaLower.contains('historia')) {
-      return Icons.history_edu;
-    } else if (materiaLower.contains('literatura') || materiaLower.contains('lengua')) {
-      return Icons.menu_book;
-    } else if (materiaLower.contains('programación') || materiaLower.contains('programacion')) {
-      return Icons.code;
-    } else if (materiaLower.contains('educación') || materiaLower.contains('educacion')) {
-      return Icons.sports_soccer;
+    
+    // Lista de iconos disponibles organizados por categorías
+    final iconosCiencias = [Icons.science, Icons.biotech, Icons.psychology, Icons.scatter_plot];
+    final iconosMatematicas = [Icons.calculate, Icons.functions, Icons.analytics, Icons.show_chart];
+    final iconosLenguaje = [Icons.menu_book, Icons.translate, Icons.create, Icons.record_voice_over];
+    final iconosSociales = [Icons.history_edu, Icons.public, Icons.groups, Icons.gavel];
+    final iconosArtes = [Icons.palette, Icons.music_note, Icons.theater_comedy, Icons.brush];
+    final iconosDeportes = [Icons.sports_soccer, Icons.sports_basketball, Icons.fitness_center, Icons.pool];
+    final iconosTecnologia = [Icons.code, Icons.computer, Icons.engineering, Icons.memory];
+    final iconosGenericos = [Icons.book, Icons.school, Icons.library_books, Icons.assignment];
+
+    // Detectar categoría por palabras clave
+    List<IconData> iconosCategoria;
+    if (materiaLower.contains('matemática') || materiaLower.contains('matematica') || 
+        materiaLower.contains('álgebra') || materiaLower.contains('algebra') ||
+        materiaLower.contains('geometría') || materiaLower.contains('geometria') ||
+        materiaLower.contains('cálculo') || materiaLower.contains('calculo') ||
+        materiaLower.contains('estadística') || materiaLower.contains('estadistica')) {
+      iconosCategoria = iconosMatematicas;
+    } else if (materiaLower.contains('física') || materiaLower.contains('fisica') ||
+               materiaLower.contains('química') || materiaLower.contains('quimica') ||
+               materiaLower.contains('biología') || materiaLower.contains('biologia') ||
+               materiaLower.contains('ciencias') || materiaLower.contains('laboratorio')) {
+      iconosCategoria = iconosCiencias;
+    } else if (materiaLower.contains('literatura') || materiaLower.contains('lengua') ||
+               materiaLower.contains('español') || materiaLower.contains('inglés') ||
+               materiaLower.contains('idioma') || materiaLower.contains('comunicación') ||
+               materiaLower.contains('redacción') || materiaLower.contains('lectura')) {
+      iconosCategoria = iconosLenguaje;
+    } else if (materiaLower.contains('historia') || materiaLower.contains('geografía') ||
+               materiaLower.contains('geografia') || materiaLower.contains('civismo') ||
+               materiaLower.contains('social') || materiaLower.contains('política') ||
+               materiaLower.contains('filosofía') || materiaLower.contains('filosofia')) {
+      iconosCategoria = iconosSociales;
+    } else if (materiaLower.contains('arte') || materiaLower.contains('música') ||
+               materiaLower.contains('musica') || materiaLower.contains('dibujo') ||
+               materiaLower.contains('pintura') || materiaLower.contains('teatro') ||
+               materiaLower.contains('danza')) {
+      iconosCategoria = iconosArtes;
+    } else if (materiaLower.contains('educación física') || materiaLower.contains('educacion fisica') ||
+               materiaLower.contains('deporte') || materiaLower.contains('gimnasia') ||
+               materiaLower.contains('natación') || materiaLower.contains('natacion')) {
+      iconosCategoria = iconosDeportes;
+    } else if (materiaLower.contains('programación') || materiaLower.contains('programacion') ||
+               materiaLower.contains('informática') || materiaLower.contains('informatica') ||
+               materiaLower.contains('computación') || materiaLower.contains('computacion') ||
+               materiaLower.contains('tecnología') || materiaLower.contains('tecnologia') ||
+               materiaLower.contains('sistemas')) {
+      iconosCategoria = iconosTecnologia;
     } else {
-      return Icons.book;
+      iconosCategoria = iconosGenericos;
     }
+
+    // Seleccionar icono basado en hash del nombre para consistencia
+    final hash = materiaNombre.hashCode.abs();
+    return iconosCategoria[hash % iconosCategoria.length];
   }
 
   Color _getMateriaColor(String materiaNombre) {
-    final materiaLower = materiaNombre.toLowerCase();
-    if (materiaLower.contains('matemática') || materiaLower.contains('matemática')) {
-      return Colors.blue[600]!;
-    } else if (materiaLower.contains('física') || materiaLower.contains('fisica')) {
-      return Colors.green[600]!;
-    } else if (materiaLower.contains('química') || materiaLower.contains('quimica')) {
-      return Colors.purple[600]!;
-    } else if (materiaLower.contains('historia')) {
-      return Colors.brown[600]!;
-    } else if (materiaLower.contains('literatura') || materiaLower.contains('lengua')) {
-      return Colors.orange[600]!;
-    } else if (materiaLower.contains('programación') || materiaLower.contains('programacion')) {
-      return Colors.indigo[600]!;
-    } else if (materiaLower.contains('educación') || materiaLower.contains('educacion')) {
-      return Colors.teal[600]!;
-    } else {
-      return Colors.grey[600]!;
-    }
+    // Lista de colores vibrantes y diferenciados
+    final colores = [
+      Colors.blue[600]!,      // Azul
+      Colors.green[600]!,     // Verde
+      Colors.orange[600]!,    // Naranja
+      Colors.purple[600]!,    // Morado
+      Colors.red[600]!,       // Rojo
+      Colors.teal[600]!,      // Verde azulado
+      Colors.indigo[600]!,    // Índigo
+      Colors.brown[600]!,     // Marrón
+      Colors.pink[600]!,      // Rosa
+      Colors.amber[600]!,     // Ámbar
+      Colors.cyan[600]!,      // Cian
+      Colors.deepOrange[600]!, // Naranja profundo
+      Colors.lightGreen[600]!, // Verde claro
+      Colors.deepPurple[600]!, // Morado profundo
+      Colors.lime[600]!,      // Lima
+      Colors.blueGrey[600]!,  // Azul gris
+    ];
+
+    // Generar color consistente basado en hash del nombre
+    final hash = materiaNombre.hashCode.abs();
+    return colores[hash % colores.length];
   }
 
   String _getInitials() {
@@ -440,5 +518,84 @@ class _EstudianteDashboardPageParaPadreState extends State<EstudianteDashboardPa
         ),
       ),
     );
+  }
+
+  void _irAPagarMatricula() async {
+    try {
+      // Verificar que el usuario puede acceder a matrículas
+      final puedeAcceder = await MatriculaService.puedeAccederMatriculas();
+      if (!puedeAcceder) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No tienes permisos para acceder a las matrículas'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Para esta implementación simplificada, solo pasamos este estudiante
+      final List<Map<String, dynamic>> estudiantes = [widget.estudiante];
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => NuevoPagoPage(
+              estudiantes: estudiantes,
+              estudiantePreseleccionado: widget.estudiante,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Error al ir a pagar matrícula: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _verMatriculasPagadas() async {
+    try {
+      // Verificar que el usuario puede acceder a matrículas
+      final puedeAcceder = await MatriculaService.puedeAccederMatriculas();
+      if (!puedeAcceder) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No tienes permisos para acceder a las matrículas'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HistorialMatriculasPage(estudiante: widget.estudiante),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al acceder al historial: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 } 

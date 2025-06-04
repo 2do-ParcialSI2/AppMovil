@@ -171,12 +171,25 @@ class _PadreTutorDashboardPageState extends State<PadreTutorDashboardPage> {
                 ),
                 onSelected: (value) async {
                   switch (value) {
+                    case 'perfil':
+                      _mostrarPerfil();
+                      break;
                     case 'logout':
                       await authProvider.logout();
                       break;
                   }
                 },
                 itemBuilder: (BuildContext context) => [
+                  PopupMenuItem<String>(
+                    value: 'perfil',
+                    child: Row(
+                      children: [
+                        Icon(Icons.person, color: Colors.blue[700]),
+                        const SizedBox(width: 8),
+                        Text('Mi Perfil'),
+                      ],
+                    ),
+                  ),
                   const PopupMenuItem<String>(
                     value: 'logout',
                     child: Row(
@@ -298,7 +311,7 @@ class _PadreTutorDashboardPageState extends State<PadreTutorDashboardPage> {
               color: Colors.white.withValues(alpha: 0.9),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Row(
             children: [
               Icon(Icons.family_restroom, size: 16, color: Colors.white.withValues(alpha: 0.8)),
@@ -446,6 +459,84 @@ class _PadreTutorDashboardPageState extends State<PadreTutorDashboardPage> {
         builder: (context) => EstudianteDashboardPageParaPadre(
           estudiante: hijo,
         ),
+      ),
+    );
+  }
+
+  void _mostrarPerfil() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser;
+    
+    if (user == null) return;
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.orange[100],
+                child: Text(
+                  user.firstName.substring(0, 1).toUpperCase(),
+                  style: TextStyle(
+                    color: Colors.orange[700],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text('Mi Perfil'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildPerfilRow('Nombre:', '${user.firstName} ${user.lastName}'),
+              _buildPerfilRow('Email:', user.email),
+              _buildPerfilRow('Rol:', 'Padre/Tutor'),
+              if (_padreTutorData != null) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Información adicional:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                _buildPerfilRow('Teléfono:', _padreTutorData!['telefono'] ?? 'No registrado'),
+                _buildPerfilRow('Dirección:', _padreTutorData!['direccion'] ?? 'No registrada'),
+                _buildPerfilRow('Hijos registrados:', '${_hijos.length}'),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPerfilRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          Expanded(
+            child: Text(value),
+          ),
+        ],
       ),
     );
   }
